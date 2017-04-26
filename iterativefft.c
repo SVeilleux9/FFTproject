@@ -1,11 +1,13 @@
-#include <stdio.h>
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define PI 3.1415
 
-struct complex {
-	double re;
-	double im;
+typedef struct{
+	double r;
+	double i;
 } complex;
 
 
@@ -21,43 +23,77 @@ int reverseBits(int num, int size){
 
 }
 
-void fft(struct complex in, struct complex out, int len){
+void fft(complex *in, complex *out, int len){
 
 	int s = log(len)/log(2);
+	int i, revi, j, k, m, theta, i1, i2;
+	complex wm, w, tmp;
 
-	for(int i=0; i<len; i++){
-		out[i] = reverseBits(out[i], s);
+	for(i=0; i<len; i++){
+		revi = reverseBits(i, s);
+		out[revi] = in[i];
 	}
 
-	for(int i=1; i<s; i++){
-		int m = 0x01 << s;
-		int theta = 2*PI/m;
-		struct complex wm;
-		wm.re = cos(theta);
-		wm.im = sin(theta);
+	for(i=1; i<=s; i++){
+		m = 0x01 << s;
+		theta = 2*PI/m;
+		
+		wm.r = cos(theta);
+		wm.i = sin(theta);
 
-		for(int j=0; j<len; j+=m){
-			struct complex w;
-			w.re = 1;
-			w.im = 0;
+		for(j=0; j<len; j+=m){
+			
+			w.r = 1;
+			w.i = 0;
 
-			for(int k=0; k<m/2; k++){
-				int ind1 = j+k;
-				int ind2 = j+k+m/2;
+			for(k=0; k<m/2; k++){
+				i1 = j+k;
+				i2 = j+k+m/2;
 
-				struct complex u;
-				u.re = out[ind1].re;
-				u.im = out[ind1].im;
+				tmp.r = w.r*out[i2].r - w.i*out[i2].i;
+				out[i1].r = out[i1].r + tmp.r;
+				out[i2].r = out[i1].r - tmp.r;
 
-				struct complex t;
-				t.re = out[ind2].re*w.re;
-				
+	      			tmp.i = w.r*out[i2].i + w.i*out[i2].r;
+				out[i1].i = out[i1].i + tmp.i;
+				out[i2].i = out[i1].i - tmp.i;
 
+				w.r = w.r*wm.r - w.i*wm.i;
+				w.i = w.r*wm.i + w.i*wm.r;
+		
+			}
+		}
+	}
+}
 
+double Cabs(double real, double imag){
+
+	return sqrt(real*real + imag*imag);
 
 }
 
 void main(){
 
-	int length = 8;
+	double data[] = {
+		1.000000, -0.104528, -0.978148, 0.309017, 0.913545, -0.500000, -0.809017, 0.669131, 
+		0.669131, -0.809017, -0.500000, 0.913545, 0.309017, -0.978148, -0.104528, 1.000000
+	};
+
+	int len = sizeof(data)/sizeof(data[0]);
+
+	complex *indataFFT, *outdataFFT;
+	indataFFT  = (complex*)calloc(len, sizeof(complex));
+	outdataFFT = (complex*)calloc(len, sizeof(complex));
+	 
+
+	for(int i=0; i<len; i++){
+		indataFFT[i].r = data[i];
+	}
+	
+	fft(indataFFT, outdataFFT, len);
+
+	for(int i=0; i<len; i++){
+		printf("%f\n",Cabs(outdataFFT[i].r, outdataFFT[i].i));
+	}
+
 }
