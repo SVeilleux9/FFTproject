@@ -2,17 +2,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <complex.h>
 
 #include <omp.h>
+#include <papi.h>
 
-#define PI 3.141592653589793238462643383279502884197
-#define MULT 1024*4
+#define MULT 1024
 #define DEPTH 4
-
-typedef struct{
-	double r; 
-	double i;
-	} complex;
+#define RUNS 10
 
 void fft_serial(complex *data, int len);
 void fft_parallel(complex *data, int len, int depth);
@@ -31,7 +28,7 @@ void fft_serial(complex *data, int len){
 
 		int i, halflen = len/2;
 		double theta;
-		complex *odd, *even, w, tmp;
+		double complex *odd, *even, w, tmp;
 
 		even = (complex*)calloc(halflen, sizeof(complex));
 		odd = (complex*)calloc(halflen, sizeof(complex));
@@ -46,17 +43,12 @@ void fft_serial(complex *data, int len){
 		fft_serial(odd, halflen);		
 
 		for(i=0;i<halflen;i++){	
-			theta = 2*PI*i/(double)len;
-			w.r = cos(theta);
-			w.i = sin(theta);
+			theta = 2*M_PI*i/(double)len;
+			w = cos(theta) + I*sin(theta);
 
-			tmp.r = w.r*odd[i].r - w.i*odd[i].i;
-			data[   i   ].r = even[i].r + tmp.r;
-			data[i+halflen].r = even[i].r - tmp.r;
-
-      			tmp.i = w.r*odd[i].i + w.i*odd[i].r;
-			data[   i   ].i = even[i].i + tmp.i;
-			data[i+halflen].i = even[i].i - tmp.i;
+			tmp = w*odd[i];
+			data[    i    ] = even[i] + tmp;
+			data[i+halflen] = even[i] - tmp;
 		}
 
 	
@@ -70,10 +62,9 @@ void fft_parallel(complex *data, int len, int depth){
 
 	if(len>1){
 
-		printf("depth: %d, thread: %d\n", depth, omp_get_thread_num());
 		int i, halflen = len/2;
 		double theta;
-		complex *odd, *even, w, tmp;
+		double complex *odd, *even, w, tmp;
 		depth++;
 
 		even = (complex*)calloc(halflen, sizeof(complex));
@@ -100,17 +91,12 @@ void fft_parallel(complex *data, int len, int depth){
 
 		#pragma omp parallel for
 		for(i=0;i<halflen;i++){	
-			theta = 2*PI*i/(double)len;
-			w.r = cos(theta);
-			w.i = sin(theta);
+			theta = 2*M_PI*i/(double)len;
+			w = cos(theta) + I*sin(theta);
 
-			tmp.r = w.r*odd[i].r - w.i*odd[i].i;
-			data[   i   ].r = even[i].r + tmp.r;
-			data[i+halflen].r = even[i].r - tmp.r;
-
-      			tmp.i = w.r*odd[i].i + w.i*odd[i].r;
-			data[   i   ].i = even[i].i + tmp.i;
-			data[i+halflen].i = even[i].i - tmp.i;
+			tmp = w*odd[i];
+			data[    i    ] = even[i] + tmp;
+			data[i+halflen] = even[i] - tmp;
 		}
 	
 	}
@@ -256,7 +242,7 @@ void main(){
 		0.035309, -0.999429, -0.032239, 0.999528, 0.029170, -0.999618, -0.026100, 0.999698, 
 		0.023030, -0.999769, -0.019960, 0.999830, 0.016889, -0.999882, -0.013819, 0.999925, 
 		0.010748, -0.999958, -0.007677, 0.999981, 0.004606, -0.999995, -0.001535, 1.000000
-		};
+	};
 
 	int len = sizeof(data)/sizeof(data[0]);
 
@@ -266,11 +252,25 @@ void main(){
 	#pragma omp parallel for
 	for(int k=0; k<MULT; k++){
 		for(int i=0; i<len; i++){
-			dataFFT[k*len+i].r = data[i];
+			dataFFT[k*len+i] = data[i] + I*0;
 		}
 	}
 
 
-	fft(dataFFT, len*MULT);
+	long long start, end;
+	long long time=0;
 
+	PAPI_library_init(PAPI_VER_CURRENT);
+
+
+	for(int i=0; i<RUNS; i++){
+		start = PAPI_get_real_usec();
+
+		fft(dataFFT, len*MULT);
+
+		end = PAPI_get_real_usec();
+		time += end-start;
+	}
+
+	printf("Average time: %lld\n", time/RUNS);
 }
